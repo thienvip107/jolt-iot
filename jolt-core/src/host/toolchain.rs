@@ -9,14 +9,14 @@ use dirs::home_dir;
 use eyre::{bail, eyre, Result};
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_arch = "wasm32", target_arch = "arm")))]
 use tokio::runtime::Runtime;
 
 const TOOLCHAIN_TAG: &str = include_str!("../../../guest-toolchain-tag");
 const DOWNLOAD_RETRIES: usize = 5;
 const DELAY_BASE_MS: u64 = 500;
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_arch = "wasm32", target_arch = "arm")))]
 /// Installs the toolchain if it is not already
 pub fn install_toolchain() -> Result<()> {
     if !has_toolchain() {
@@ -39,7 +39,7 @@ pub fn install_toolchain() -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_arch = "wasm32", target_arch = "arm")))]
 pub fn install_no_std_toolchain() -> Result<()> {
     std::process::Command::new("rustup")
         .args(["target", "add", "riscv32im-unknown-none-elf"])
@@ -47,7 +47,7 @@ pub fn install_no_std_toolchain() -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_arch = "wasm32", target_arch = "arm")))]
 async fn retry_times<F, T, E>(times: usize, base_ms: u64, f: F) -> Result<T>
 where
     F: Fn() -> E,
@@ -110,7 +110,7 @@ fn unpack_toolchain() -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_arch = "wasm32", target_arch = "arm")))]
 async fn download_toolchain(client: &Client, url: &str) -> Result<()> {
     let jolt_dir = jolt_dir();
     let output_path = jolt_dir.join("rust-toolchain.tar.gz");
@@ -165,7 +165,7 @@ fn toolchain_url() -> String {
     )
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_arch = "wasm32", target_arch = "arm")))]
 pub fn uninstall_no_std_toolchain() -> Result<()> {
     std::process::Command::new("rustup")
         .args(["target", "remove", "riscv32im-unknown-none-elf"])
@@ -175,7 +175,7 @@ pub fn uninstall_no_std_toolchain() -> Result<()> {
     Ok(())
 }
 
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_arch = "wasm32", target_arch = "arm")))]
 /// Uninstalls the toolchain if it is already installed
 pub fn uninstall_toolchain() -> Result<()> {
     if !has_toolchain() {
