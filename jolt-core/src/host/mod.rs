@@ -34,11 +34,11 @@ use crate::{
 };
 
 use self::analyze::ProgramSummary;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_arch = "wasm32", target_arch = "arm")))]
 use self::toolchain::{install_no_std_toolchain, install_toolchain};
 
 pub mod analyze;
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(any(target_arch = "wasm32", target_arch = "arm")))]
 pub mod toolchain;
 
 #[derive(Clone)]
@@ -101,9 +101,9 @@ impl Program {
     #[tracing::instrument(skip_all, name = "Program::build")]
     pub fn build(&mut self) {
         if self.elf.is_none() {
-            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(not(any(target_arch = "wasm32", target_arch = "arm")))]
             install_toolchain().unwrap();
-            #[cfg(not(target_arch = "wasm32"))]
+            #[cfg(not(any(target_arch = "wasm32", target_arch = "arm")))]
             install_no_std_toolchain().unwrap();
 
             self.save_linker();
