@@ -340,90 +340,97 @@ where
     type Constraints: R1CSConstraints<C, F>;
 
     #[tracing::instrument(skip_all, name = "Jolt::preprocess")]
-    fn preprocess(
-        bytecode: Vec<ELFInstruction>,
-        memory_layout: MemoryLayout,
-        memory_init: Vec<(u64, u8)>,
-        max_bytecode_size: usize,
-        max_memory_address: usize,
-        max_trace_length: usize,
-    ) -> JoltPreprocessing<C, F, PCS, ProofTranscript> {
-        println!("Jolt::preprocess called");
-        log_memory_usage("Jolt::preprocess start");
-        let small_value_lookup_tables = F::compute_lookup_tables();
-        F::initialize_lookup_tables(small_value_lookup_tables.clone());
-        icicle::icicle_init();
+fn preprocess(
+    bytecode: Vec<ELFInstruction>,
+    memory_layout: MemoryLayout,
+    memory_init: Vec<(u64, u8)>,
+    max_bytecode_size: usize,
+    max_memory_address: usize,
+    max_trace_length: usize,
+) -> JoltPreprocessing<C, F, PCS, ProofTranscript> {
+    println!("Jolt::preprocess called");
+    log_memory_usage("Jolt::preprocess start");
 
-        let bytecode_commitment_shapes = BytecodeProof::<F, PCS, ProofTranscript>::commit_shapes(
-            max_bytecode_size,
-            max_trace_length,
-        );
-        let ram_commitment_shapes = ReadWriteMemoryPolynomials::<F>::commitment_shapes(
-            max_memory_address,
-            max_trace_length,
-        );
-        let timestamp_range_check_commitment_shapes =
-            TimestampValidityProof::<F, PCS, ProofTranscript>::commitment_shapes(max_trace_length);
+    // Define safe maximums to prevent huge allocations.
+    // (These values should be chosen based on your application’s constraints.)
+    const SAFE_MAX_TRACE_LENGTH: usize = 1 << 20;      // e.g., 1,048,576 steps
+    const SAFE_MAX_BYTECODE_SIZE: usize = 1 << 20;       // e.g., 1,048,576 instructions
+    const SAFE_MAX_MEMORY_ADDRESS: usize = 1 << 24;      // e.g., 16MB address space
 
-        let instruction_lookups_commitment_shapes = InstructionLookupsProof::<
-            C,
-            M,
-            F,
-            PCS,
-            Self::InstructionSet,
-            Self::Subtables,
-            ProofTranscript,
-        >::commitment_shapes(max_trace_length);
+    // Cap the incoming parameters.
+    let safe_trace_length = max_trace_length.min(SAFE_MAX_TRACE_LENGTH);
+    let safe_bytecode_size = max_bytecode_size.min(SAFE_MAX_BYTECODE_SIZE);
+    let safe_memory_address = max_memory_address.min(SAFE_MAX_MEMORY_ADDRESS);
 
-        let instruction_lookups_preprocessing = InstructionLookupsPreprocessing::preprocess::<
-            M,
-            Self::InstructionSet,
-            Self::Subtables,
-        >();
+    let small_value_lookup_tables = F::compute_lookup_tables();
+    F::initialize_lookup_tables(small_value_lookup_tables.clone());
+    icicle::icicle_init();
 
-        let read_write_memory_preprocessing = ReadWriteMemoryPreprocessing::preprocess(memory_init);
+    let bytecode_commitment_shapes =
+        BytecodeProof::<F, PCS, ProofTranscript>::commit_shapes(safe_bytecode_size, safe_trace_length);
+    let ram_commitment_shapes = ReadWriteMemoryPolynomials::<F>::commitment_shapes(safe_memory_address, safe_trace_length);
+    let timestamp_range_check_commitment_shapes =
+        TimestampValidityProof::<F, PCS, ProofTranscript>::commitment_shapes(safe_trace_length);
+    let instruction_lookups_commitment_shapes = InstructionLookupsProof::<
+        C,
+        M,
+        F,
+        PCS,
+        Self::InstructionSet,
+        Self::Subtables,
+        ProofTranscript,
+    >::commitment_shapes(safe_trace_length);
 
-        let bytecode_rows: Vec<BytecodeRow> = bytecode
-            .into_iter()
-            .flat_map(|instruction| match instruction.opcode {
-                tracer::RV32IM::MULH => MULHInstruction::<32>::virtual_sequence(instruction),
-                tracer::RV32IM::MULHSU => MULHSUInstruction::<32>::virtual_sequence(instruction),
-                tracer::RV32IM::DIV => DIVInstruction::<32>::virtual_sequence(instruction),
-                tracer::RV32IM::DIVU => DIVUInstruction::<32>::virtual_sequence(instruction),
-                tracer::RV32IM::REM => REMInstruction::<32>::virtual_sequence(instruction),
-                tracer::RV32IM::REMU => REMUInstruction::<32>::virtual_sequence(instruction),
-                tracer::RV32IM::SH => SHInstruction::<32>::virtual_sequence(instruction),
-                tracer::RV32IM::SB => SBInstruction::<32>::virtual_sequence(instruction),
-                tracer::RV32IM::LBU => LBUInstruction::<32>::virtual_sequence(instruction),
-                tracer::RV32IM::LHU => LHUInstruction::<32>::virtual_sequence(instruction),
-                tracer::RV32IM::LB => LBInstruction::<32>::virtual_sequence(instruction),
-                tracer::RV32IM::LH => LHInstruction::<32>::virtual_sequence(instruction),
-                _ => vec![instruction],
-            })
-            .map(|instruction| BytecodeRow::from_instruction::<Self::InstructionSet>(&instruction))
-            .collect();
-        let bytecode_preprocessing = BytecodePreprocessing::<F>::preprocess(bytecode_rows);
+    let instruction_lookups_preprocessing = InstructionLookupsPreprocessing::preprocess::<
+        M,
+        Self::InstructionSet,
+        Self::Subtables,
+    >();
 
-        let commitment_shapes = [
-            bytecode_commitment_shapes,
-            ram_commitment_shapes,
-            timestamp_range_check_commitment_shapes,
-            instruction_lookups_commitment_shapes,
-        ]
-        .concat();
-        let generators = PCS::setup(&commitment_shapes);
+    let read_write_memory_preprocessing = ReadWriteMemoryPreprocessing::preprocess(memory_init);
 
-        println!("Jolt::preprocess completed");
-        log_memory_usage("Jolt::preprocess end");
-        JoltPreprocessing {
-            generators,
-            memory_layout,
-            instruction_lookups: instruction_lookups_preprocessing,
-            bytecode: bytecode_preprocessing,
-            read_write_memory: read_write_memory_preprocessing,
-            field: small_value_lookup_tables,
-        }
+    let bytecode_rows: Vec<BytecodeRow> = bytecode
+        .into_iter()
+        .flat_map(|instruction| match instruction.opcode {
+            tracer::RV32IM::MULH => MULHInstruction::<32>::virtual_sequence(instruction),
+            tracer::RV32IM::MULHSU => MULHSUInstruction::<32>::virtual_sequence(instruction),
+            tracer::RV32IM::DIV => DIVInstruction::<32>::virtual_sequence(instruction),
+            tracer::RV32IM::DIVU => DIVUInstruction::<32>::virtual_sequence(instruction),
+            tracer::RV32IM::REM => REMInstruction::<32>::virtual_sequence(instruction),
+            tracer::RV32IM::REMU => REMUInstruction::<32>::virtual_sequence(instruction),
+            tracer::RV32IM::SH => SHInstruction::<32>::virtual_sequence(instruction),
+            tracer::RV32IM::SB => SBInstruction::<32>::virtual_sequence(instruction),
+            tracer::RV32IM::LBU => LBUInstruction::<32>::virtual_sequence(instruction),
+            tracer::RV32IM::LHU => LHUInstruction::<32>::virtual_sequence(instruction),
+            tracer::RV32IM::LB => LBInstruction::<32>::virtual_sequence(instruction),
+            tracer::RV32IM::LH => LHInstruction::<32>::virtual_sequence(instruction),
+            _ => vec![instruction],
+        })
+        .map(|instruction| BytecodeRow::from_instruction::<Self::InstructionSet>(&instruction))
+        .collect();
+    let bytecode_preprocessing = BytecodePreprocessing::<F>::preprocess(bytecode_rows);
+
+    let commitment_shapes = [
+        bytecode_commitment_shapes,
+        ram_commitment_shapes,
+        timestamp_range_check_commitment_shapes,
+        instruction_lookups_commitment_shapes,
+    ]
+    .concat();
+    let generators = PCS::setup(&commitment_shapes);
+
+    println!("Jolt::preprocess completed");
+    log_memory_usage("Jolt::preprocess end");
+    JoltPreprocessing {
+        generators,
+        memory_layout,
+        instruction_lookups: instruction_lookups_preprocessing,
+        bytecode: bytecode_preprocessing,
+        read_write_memory: read_write_memory_preprocessing,
+        field: small_value_lookup_tables,
     }
+}
+
 
     #[tracing::instrument(skip_all, name = "Jolt::prove")]
     fn prove(
