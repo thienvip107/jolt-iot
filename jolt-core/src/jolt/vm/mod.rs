@@ -39,6 +39,22 @@ use common::{
     rv_trace::{ELFInstruction, JoltDevice, MemoryOp},
 };
 
+// ------------------------------------------------------------------------------
+// Added lines below: sysinfo for memory usage, and log_memory_usage helper method
+use sysinfo::{System};
+
+fn log_memory_usage(step_name: &str) {
+    let mut sys = System::new_all();
+    sys.refresh_all();
+    println!(
+        "Memory usage at {}: used {} KB / total {} KB",
+        step_name,
+        sys.used_memory(),
+        sys.total_memory()
+    );
+}
+// ------------------------------------------------------------------------------
+
 use self::bytecode::{BytecodePreprocessing, BytecodeProof, BytecodeRow, BytecodeStuff};
 use self::instruction_lookups::{
     InstructionLookupStuff, InstructionLookupsPreprocessing, InstructionLookupsProof,
@@ -90,7 +106,9 @@ where
 
 impl<InstructionSet: JoltInstructionSet> JoltTraceStep<InstructionSet> {
     fn no_op() -> Self {
-        JoltTraceStep {
+        println!("JoltTraceStep::no_op called");
+        log_memory_usage("JoltTraceStep::no_op start");
+        let step = JoltTraceStep {
             instruction_lookup: None,
             bytecode_row: BytecodeRow::no_op(0),
             memory_ops: [
@@ -100,13 +118,19 @@ impl<InstructionSet: JoltInstructionSet> JoltTraceStep<InstructionSet> {
                 MemoryOp::noop_read(),  // RAM
             ],
             circuit_flags: [false; NUM_CIRCUIT_FLAGS],
-        }
+        };
+        log_memory_usage("JoltTraceStep::no_op end");
+        step
     }
 
     fn pad(trace: &mut Vec<Self>) {
+        println!("JoltTraceStep::pad called, unpadded_length = {}", trace.len());
+        log_memory_usage("JoltTraceStep::pad start");
         let unpadded_length = trace.len();
         let padded_length = unpadded_length.next_power_of_two();
         trace.resize(padded_length, Self::no_op());
+        println!("JoltTraceStep::pad completed, padded_length = {}", padded_length);
+        log_memory_usage("JoltTraceStep::pad end");
     }
 }
 
@@ -151,47 +175,85 @@ impl<T: CanonicalSerialize + CanonicalDeserialize + Sync> StructuredPolynomialDa
     for JoltStuff<T>
 {
     fn read_write_values(&self) -> Vec<&T> {
-        self.bytecode
+        println!("JoltStuff::read_write_values called");
+        log_memory_usage("JoltStuff::read_write_values start");
+        let result = self.bytecode
             .read_write_values()
             .into_iter()
             .chain(self.read_write_memory.read_write_values())
             .chain(self.instruction_lookups.read_write_values())
             .chain(self.timestamp_range_check.read_write_values())
             .chain(self.r1cs.read_write_values())
-            .collect()
+            .collect();
+        log_memory_usage("JoltStuff::read_write_values end");
+        result
     }
 
     fn init_final_values(&self) -> Vec<&T> {
-        self.bytecode
+        println!("JoltStuff::init_final_values called");
+        log_memory_usage("JoltStuff::init_final_values start");
+        let result = self.bytecode
             .init_final_values()
             .into_iter()
             .chain(self.read_write_memory.init_final_values())
             .chain(self.instruction_lookups.init_final_values())
             .chain(self.timestamp_range_check.init_final_values())
             .chain(self.r1cs.init_final_values())
-            .collect()
+            .collect();
+        log_memory_usage("JoltStuff::init_final_values end");
+        result
     }
 
     fn read_write_values_mut(&mut self) -> Vec<&mut T> {
-        self.bytecode
+        println!("JoltStuff::read_write_values_mut called");
+        log_memory_usage("JoltStuff::read_write_values_mut start");
+        let result = self.bytecode
             .read_write_values_mut()
             .into_iter()
             .chain(self.read_write_memory.read_write_values_mut())
             .chain(self.instruction_lookups.read_write_values_mut())
             .chain(self.timestamp_range_check.read_write_values_mut())
             .chain(self.r1cs.read_write_values_mut())
-            .collect()
+            .collect();
+        log_memory_usage("JoltStuff::read_write_values_mut end");
+        result
     }
 
     fn init_final_values_mut(&mut self) -> Vec<&mut T> {
-        self.bytecode
+        println!("JoltStuff::init_final_values_mut called");
+        log_memory_usage("JoltStuff::init_final_values_mut start");
+        let result = self.bytecode
             .init_final_values_mut()
             .into_iter()
             .chain(self.read_write_memory.init_final_values_mut())
             .chain(self.instruction_lookups.init_final_values_mut())
             .chain(self.timestamp_range_check.init_final_values_mut())
             .chain(self.r1cs.init_final_values_mut())
-            .collect()
+            .collect();
+        log_memory_usage("JoltStuff::init_final_values_mut end");
+        result
+    }
+}
+
+impl<T: CanonicalSerialize + CanonicalDeserialize + Default + Sync, PCS: CommitmentScheme<ProofTranscript>, ProofTranscript: Transcript, const C: usize>
+    Initializable<T, JoltPreprocessing<C, PCS::Field, PCS, ProofTranscript>> for JoltStuff<T>
+{
+    fn initialize(preprocessing: &JoltPreprocessing<C, PCS::Field, PCS, ProofTranscript>) -> Self {
+        println!("JoltStuff::initialize called");
+        log_memory_usage("JoltStuff::initialize start");
+        let stuff = Self {
+            bytecode: BytecodeStuff::initialize(&preprocessing.bytecode),
+            read_write_memory: ReadWriteMemoryStuff::initialize(&preprocessing.read_write_memory),
+            instruction_lookups: InstructionLookupStuff::initialize(
+                &preprocessing.instruction_lookups,
+            ),
+            timestamp_range_check: TimestampRangeCheckStuff::initialize(
+                &crate::lasso::memory_checking::NoPreprocessing,
+            ),
+            r1cs: R1CSStuff::initialize(&C),
+        };
+        log_memory_usage("JoltStuff::initialize end");
+        stuff
     }
 }
 
@@ -209,28 +271,6 @@ pub type JoltPolynomials<F: JoltField> = JoltStuff<MultilinearPolynomial<F>>;
 pub type JoltCommitments<PCS: CommitmentScheme<ProofTranscript>, ProofTranscript: Transcript> =
     JoltStuff<PCS::Commitment>;
 
-impl<
-        const C: usize,
-        T: CanonicalSerialize + CanonicalDeserialize + Default + Sync,
-        PCS: CommitmentScheme<ProofTranscript>,
-        ProofTranscript: Transcript,
-    > Initializable<T, JoltPreprocessing<C, PCS::Field, PCS, ProofTranscript>> for JoltStuff<T>
-{
-    fn initialize(preprocessing: &JoltPreprocessing<C, PCS::Field, PCS, ProofTranscript>) -> Self {
-        Self {
-            bytecode: BytecodeStuff::initialize(&preprocessing.bytecode),
-            read_write_memory: ReadWriteMemoryStuff::initialize(&preprocessing.read_write_memory),
-            instruction_lookups: InstructionLookupStuff::initialize(
-                &preprocessing.instruction_lookups,
-            ),
-            timestamp_range_check: TimestampRangeCheckStuff::initialize(
-                &crate::lasso::memory_checking::NoPreprocessing,
-            ),
-            r1cs: R1CSStuff::initialize(&C),
-        }
-    }
-}
-
 impl<F: JoltField> JoltPolynomials<F> {
     #[tracing::instrument(skip_all, name = "JoltPolynomials::commit")]
     pub fn commit<const C: usize, PCS, ProofTranscript>(
@@ -241,6 +281,8 @@ impl<F: JoltField> JoltPolynomials<F> {
         PCS: CommitmentScheme<ProofTranscript, Field = F>,
         ProofTranscript: Transcript,
     {
+        println!("JoltPolynomials::commit called");
+        log_memory_usage("JoltPolynomials::commit start");
         let span = tracing::span!(tracing::Level::INFO, "commit::initialize");
         let _guard = span.enter();
         let mut commitments = JoltCommitments::<PCS, ProofTranscript>::initialize(preprocessing);
@@ -281,6 +323,8 @@ impl<F: JoltField> JoltPolynomials<F> {
         drop(_guard);
         drop(span);
 
+        println!("JoltPolynomials::commit completed");
+        log_memory_usage("JoltPolynomials::commit end");
         commitments
     }
 }
@@ -304,6 +348,8 @@ where
         max_memory_address: usize,
         max_trace_length: usize,
     ) -> JoltPreprocessing<C, F, PCS, ProofTranscript> {
+        println!("Jolt::preprocess called");
+        log_memory_usage("Jolt::preprocess start");
         let small_value_lookup_tables = F::compute_lookup_tables();
         F::initialize_lookup_tables(small_value_lookup_tables.clone());
         icicle::icicle_init();
@@ -367,6 +413,8 @@ where
         .concat();
         let generators = PCS::setup(&commitment_shapes);
 
+        println!("Jolt::preprocess completed");
+        log_memory_usage("Jolt::preprocess end");
         JoltPreprocessing {
             generators,
             memory_layout,
@@ -396,10 +444,12 @@ where
         JoltCommitments<PCS, ProofTranscript>,
         Option<ProverDebugInfo<F, ProofTranscript>>,
     ) {
+        println!("Jolt::prove called");
+        log_memory_usage("Jolt::prove start");
         icicle::icicle_init();
         let trace_length = trace.len();
-        let padded_trace_length = trace_length.next_power_of_two();
         println!("Trace length: {}", trace_length);
+        let padded_trace_length = trace_length.next_power_of_two();
 
         F::initialize_lookup_tables(std::mem::take(&mut preprocessing.field));
 
@@ -554,6 +604,9 @@ where
         });
         #[cfg(not(test))]
         let debug_info = None;
+
+        println!("Jolt::prove completed");
+        log_memory_usage("Jolt::prove end");
         (jolt_proof, jolt_commitments, debug_info)
     }
 
@@ -573,6 +626,8 @@ where
         commitments: JoltCommitments<PCS, ProofTranscript>,
         _debug_info: Option<ProverDebugInfo<F, ProofTranscript>>,
     ) -> Result<(), ProofVerifyError> {
+        println!("Jolt::verify called");
+        log_memory_usage("Jolt::verify start");
         let mut transcript = ProofTranscript::new(b"Jolt transcript");
         let mut opening_accumulator: VerifierOpeningAccumulator<F, PCS, ProofTranscript> =
             VerifierOpeningAccumulator::new();
@@ -656,6 +711,8 @@ where
             &mut transcript,
         )?;
 
+        println!("Jolt::verify completed");
+        log_memory_usage("Jolt::verify end");
         Ok(())
     }
 
@@ -676,14 +733,19 @@ where
         opening_accumulator: &mut VerifierOpeningAccumulator<F, PCS, ProofTranscript>,
         transcript: &mut ProofTranscript,
     ) -> Result<(), ProofVerifyError> {
-        InstructionLookupsProof::verify(
+        println!("Jolt::verify_instruction_lookups called");
+        log_memory_usage("Jolt::verify_instruction_lookups start");
+        let result = InstructionLookupsProof::verify(
             preprocessing,
             generators,
             proof,
             commitments,
             opening_accumulator,
             transcript,
-        )
+        );
+        println!("Jolt::verify_instruction_lookups completed");
+        log_memory_usage("Jolt::verify_instruction_lookups end");
+        result
     }
 
     #[tracing::instrument(skip_all)]
@@ -695,7 +757,9 @@ where
         opening_accumulator: &mut VerifierOpeningAccumulator<F, PCS, ProofTranscript>,
         transcript: &mut ProofTranscript,
     ) -> Result<(), ProofVerifyError> {
-        BytecodeProof::verify_memory_checking(
+        println!("Jolt::verify_bytecode called");
+        log_memory_usage("Jolt::verify_bytecode start");
+        let result = BytecodeProof::verify_memory_checking(
             preprocessing,
             generators,
             proof,
@@ -703,7 +767,10 @@ where
             commitments,
             opening_accumulator,
             transcript,
-        )
+        );
+        println!("Jolt::verify_bytecode completed");
+        log_memory_usage("Jolt::verify_bytecode end");
+        result
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -718,6 +785,8 @@ where
         opening_accumulator: &mut VerifierOpeningAccumulator<F, PCS, ProofTranscript>,
         transcript: &mut ProofTranscript,
     ) -> Result<(), ProofVerifyError> {
+        println!("Jolt::verify_memory called");
+        log_memory_usage("Jolt::verify_memory start");
         assert!(program_io.inputs.len() <= memory_layout.max_input_size as usize);
         assert!(program_io.outputs.len() <= memory_layout.max_output_size as usize);
         // pair the memory layout with the program io from the proof
@@ -728,14 +797,17 @@ where
             memory_layout: memory_layout.clone(),
         });
 
-        ReadWriteMemoryProof::verify(
+        let result = ReadWriteMemoryProof::verify(
             proof,
             generators,
             preprocessing,
             commitment,
             opening_accumulator,
             transcript,
-        )
+        );
+        println!("Jolt::verify_memory completed");
+        log_memory_usage("Jolt::verify_memory end");
+        result
     }
 
     #[tracing::instrument(skip_all)]
@@ -750,9 +822,14 @@ where
         opening_accumulator: &mut VerifierOpeningAccumulator<F, PCS, ProofTranscript>,
         transcript: &mut ProofTranscript,
     ) -> Result<(), ProofVerifyError> {
-        proof
+        println!("Jolt::verify_r1cs called");
+        log_memory_usage("Jolt::verify_r1cs start");
+        let result = proof
             .verify(commitments, opening_accumulator, transcript)
-            .map_err(|e| ProofVerifyError::SpartanError(e.to_string()))
+            .map_err(|e| ProofVerifyError::SpartanError(e.to_string()));
+        println!("Jolt::verify_r1cs completed");
+        log_memory_usage("Jolt::verify_r1cs end");
+        result
     }
 
     fn fiat_shamir_preamble(
@@ -761,6 +838,8 @@ where
         memory_layout: &MemoryLayout,
         trace_length: usize,
     ) {
+        println!("Jolt::fiat_shamir_preamble called");
+        log_memory_usage("Jolt::fiat_shamir_preamble start");
         transcript.append_u64(trace_length as u64);
         transcript.append_u64(C as u64);
         transcript.append_u64(M as u64);
@@ -771,6 +850,8 @@ where
         transcript.append_bytes(&program_io.inputs);
         transcript.append_bytes(&program_io.outputs);
         transcript.append_u64(program_io.panic as u64);
+        println!("Jolt::fiat_shamir_preamble completed");
+        log_memory_usage("Jolt::fiat_shamir_preamble end");
     }
 }
 

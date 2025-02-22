@@ -37,6 +37,7 @@ icicle = [
 ]
 
 [dependencies]
+sysinfo = "0.30"
 ark-bn254 = "0.4.0"
 ark-ec = { version = "0.4.2", default-features = false }
 ark-ff = { version = "0.4.2", default-features = false }
