@@ -408,8 +408,6 @@ fn preprocess(
         })
         .map(|instruction| BytecodeRow::from_instruction::<Self::InstructionSet>(&instruction))
         .collect();
-    let dummy_address = memory_layout.input_start; // or use common::constants::RAM_START_ADDRESS
-    bytecode_rows.insert(0, BytecodeRow::no_op(dummy_address));
     let bytecode_preprocessing = BytecodePreprocessing::<F>::preprocess(bytecode_rows);
 
     let commitment_shapes = [
