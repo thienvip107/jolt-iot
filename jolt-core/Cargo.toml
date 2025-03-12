@@ -27,7 +27,7 @@ ark-serialize = { version = "0.4.2", default-features = false, features = [
     "derive",
 ] }
 ark-std = { version = "0.4.0" }
-binius-field = { git = "https://gitlab.com/UlvetannaOSS/binius", package = "binius_field"}
+binius-field = { git = "https://gitlab.com/UlvetannaOSS/binius", package = "binius_field", rev="0b5a23788735bd32e64ab802b057689561f83b57"}
 clap = { version = "4.3.10", features = ["derive"] }
 digest = "0.8.1"
 enum_dispatch = "0.3.12"
