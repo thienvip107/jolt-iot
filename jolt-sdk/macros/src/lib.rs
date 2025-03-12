@@ -444,6 +444,14 @@ impl MacroBuilder {
             }
 
             #[cfg(target_arch = "wasm32")]
+            use jolt::{Jolt,  rv32i_vm::{
+                JoltHyperKZGProof, ProofTranscript, RV32IJoltProof, RV32IJoltVM, Serializable, PCS, RV32I,
+            }};
+
+            #[cfg(target_arch = "wasm32")]
+            use common::rv_trace::{JoltDevice, MemoryLayout, MemoryOp};
+
+            #[cfg(target_arch = "wasm32")]
             fn deserialize_from_bin<'a, T: Deserialize<'a>>(
                 data: &'a [u8],
             ) -> Result<T, rmp_serde::decode::Error> {
@@ -548,11 +556,6 @@ impl MacroBuilder {
             #[wasm_bindgen]
             #[cfg(all(target_arch = "wasm32", not(feature = "guest")))]
             pub fn #verify_wasm_fn_name(preprocessing_data: &[u8], proof_bytes: &[u8]) -> bool {
-                use jolt::{Jolt,  rv32i_vm::{
-                    JoltHyperKZGProof, ProofTranscript, RV32IJoltProof, RV32IJoltVM, Serializable, PCS, RV32I,
-                }};
-                use common::rv_trace::{JoltDevice, MemoryLayout, MemoryOp};
-                
                 let decoded_preprocessing_data: DecodedData = deserialize_from_bin(preprocessing_data).unwrap();
                 let proof = JoltHyperKZGProof::deserialize_from_bytes(proof_bytes).unwrap();
                 let memory_layout = MemoryLayout::new(#max_input_size, #max_output_size);
