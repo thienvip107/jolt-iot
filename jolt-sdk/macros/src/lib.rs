@@ -541,20 +541,21 @@ impl MacroBuilder {
     fn make_wasm_function(&self) -> TokenStream2 {
         let fn_name = self.get_func_name();
         let verify_wasm_fn_name = Ident::new(&format!("verify_{}", fn_name), fn_name.span());
-
+        let attributes = parse_attributes(&self.attr);
+        let max_input_size = proc_macro2::Literal::u64_unsuffixed(attributes.max_input_size);
+        let max_output_size = proc_macro2::Literal::u64_unsuffixed(attributes.max_output_size);
         quote! {
             #[wasm_bindgen]
             #[cfg(all(target_arch = "wasm32", not(feature = "guest")))]
             pub fn #verify_wasm_fn_name(preprocessing_data: &[u8], proof_bytes: &[u8]) -> bool {
-                use jolt::vm::{Jolt,  rv32i_vm::{
+                use jolt::{Jolt,  rv32i_vm::{
                     JoltHyperKZGProof, ProofTranscript, RV32IJoltProof, RV32IJoltVM, Serializable, PCS, RV32I,
                 }};
-                let attributes = parse_attributes(&self.attr);
-                let max_input_size = proc_macro2::Literal::u64_unsuffixed(attributes.max_input_size);
-                let max_output_size = proc_macro2::Literal::u64_unsuffixed(attributes.max_output_size);
+                use common::rv_trace::{JoltDevice, MemoryLayout, MemoryOp};
+                
                 let decoded_preprocessing_data: DecodedData = deserialize_from_bin(preprocessing_data).unwrap();
                 let proof = JoltHyperKZGProof::deserialize_from_bytes(proof_bytes).unwrap();
-                let memory_layout = MemoryLayout::new(max_input_size, max_output_size);
+                let memory_layout = MemoryLayout::new(#max_input_size, #max_output_size);
                 let preprocessing = RV32IJoltVM::preprocess(
                     decoded_preprocessing_data.bytecode,
                     memory_layout,
