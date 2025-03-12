@@ -443,10 +443,6 @@ impl MacroBuilder {
                 memory_init: Vec<(u64, u8)>,
             }
 
-            #[cfg(all(target_arch = "wasm32", not(feature = "guest")))]
-            use jolt::{JoltHyperKZGProof, MemoryLayout};
-
-
             #[cfg(target_arch = "wasm32")]
             fn deserialize_from_bin<'a, T: Deserialize<'a>>(
                 data: &'a [u8],
@@ -552,6 +548,7 @@ impl MacroBuilder {
             #[wasm_bindgen]
             #[cfg(all(target_arch = "wasm32", not(feature = "guest")))]
             pub fn #verify_wasm_fn_name(preprocessing_data: &[u8], proof_bytes: &[u8]) -> bool {
+                use jolt::{JoltHyperKZGProof, Serializable, MemoryLayout, RV32IJoltVM, ProofTranscript};
                 let decoded_preprocessing_data: DecodedData = deserialize_from_bin(preprocessing_data).unwrap();
                 let proof = JoltHyperKZGProof::deserialize_from_bytes(proof_bytes).unwrap();
                 let memory_layout = MemoryLayout::new(#max_input_size, #max_output_size);
