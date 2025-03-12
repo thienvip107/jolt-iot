@@ -443,13 +443,9 @@ impl MacroBuilder {
                 memory_init: Vec<(u64, u8)>,
             }
 
-            #[cfg(target_arch = "wasm32")]
-            use jolt::{Jolt,  rv32i_vm::{
-                JoltHyperKZGProof, ProofTranscript, RV32IJoltProof, RV32IJoltVM, Serializable, PCS, RV32I,
-            }};
+            #[cfg(all(target_arch = "wasm32", not(feature = "guest")))]
+            use jolt::{JoltHyperKZGProof, MemoryLayout};
 
-            #[cfg(target_arch = "wasm32")]
-            use common::rv_trace::{JoltDevice, MemoryLayout, MemoryOp};
 
             #[cfg(target_arch = "wasm32")]
             fn deserialize_from_bin<'a, T: Deserialize<'a>>(
