@@ -554,7 +554,7 @@ impl MacroBuilder {
                 let max_output_size = proc_macro2::Literal::u64_unsuffixed(attributes.max_output_size);
                 let decoded_preprocessing_data: DecodedData = deserialize_from_bin(preprocessing_data).unwrap();
                 let proof = JoltHyperKZGProof::deserialize_from_bytes(proof_bytes).unwrap();
-                let memory_layout = MemoryLayout::new(#max_input_size, #max_output_size);
+                let memory_layout = MemoryLayout::new(max_input_size, max_output_size);
                 let preprocessing = RV32IJoltVM::preprocess(
                     decoded_preprocessing_data.bytecode,
                     memory_layout,
