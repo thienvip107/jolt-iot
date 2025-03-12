@@ -546,20 +546,25 @@ impl MacroBuilder {
             #[wasm_bindgen]
             #[cfg(all(target_arch = "wasm32", not(feature = "guest")))]
             pub fn #verify_wasm_fn_name(preprocessing_data: &[u8], proof_bytes: &[u8]) -> bool {
-                use jolt::{Jolt, JoltHyperKZGProof, RV32IJoltVM, ProofTranscript};
-
+                use jolt::vm::{Jolt,  rv32i_vm::{
+                    JoltHyperKZGProof, ProofTranscript, RV32IJoltProof, RV32IJoltVM, Serializable, PCS, RV32I,
+                }};
+                let attributes = parse_attributes(&self.attr);
+                let max_input_size = proc_macro2::Literal::u64_unsuffixed(attributes.max_input_size);
+                let max_output_size = proc_macro2::Literal::u64_unsuffixed(attributes.max_output_size);
                 let decoded_preprocessing_data: DecodedData = deserialize_from_bin(preprocessing_data).unwrap();
                 let proof = JoltHyperKZGProof::deserialize_from_bytes(proof_bytes).unwrap();
-
+                let memory_layout = MemoryLayout::new(#max_input_size, #max_output_size);
                 let preprocessing = RV32IJoltVM::preprocess(
                     decoded_preprocessing_data.bytecode,
+                    memory_layout,
                     decoded_preprocessing_data.memory_init,
                     1 << 20,
                     1 << 20,
                     1 << 24,
                 );
 
-                let result = RV32IJoltVM::verify(preprocessing, proof.proof, proof.commitments);
+                let result = RV32IJoltVM::verify(preprocessing, proof.proof, proof.commitments, None);
                 result.is_ok()
             }
         }
