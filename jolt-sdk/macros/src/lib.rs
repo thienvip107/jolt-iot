@@ -552,14 +552,14 @@ impl MacroBuilder {
                 let decoded_preprocessing_data: DecodedData = deserialize_from_bin(preprocessing_data).unwrap();
                 let proof = JoltHyperKZGProof::deserialize_from_bytes(proof_bytes).unwrap();
                 let memory_layout = MemoryLayout::new(#max_input_size, #max_output_size);
-                let preprocessing = RV32IJoltVM::preprocess(
-                    decoded_preprocessing_data.bytecode,
-                    memory_layout,
-                    decoded_preprocessing_data.memory_init,
-                    1 << 20,
-                    1 << 20,
-                    1 << 24,
-                );
+                // let preprocessing = RV32IJoltVM::preprocess(
+                //     decoded_preprocessing_data.bytecode,
+                //     memory_layout,
+                //     decoded_preprocessing_data.memory_init,
+                //     1 << 20,
+                //     1 << 20,
+                //     1 << 24,
+                // );
                 true
                 // let result = RV32IJoltVM::verify(preprocessing, proof.proof, proof.commitments, None);
                 // result.is_ok()
